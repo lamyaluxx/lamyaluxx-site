@@ -1780,20 +1780,54 @@ nav.mainnav a:hover, nav.mainnav button:hover, nav.mainnav a.active{color:var(--
     }
   });
 
+  /* ---------------- forms: sent to your inbox through Formspree ---------------- */
+  var FORMSPREE = {
+    customForm:  'https://formspree.io/f/xppdonkj',
+    contactForm: 'https://formspree.io/f/xgakpqrz'
+  };
+  // reads every filled-in box on the form, using its label as the name
+  function formFields(form){
+    var data = {}, finishes = [];
+    form.querySelectorAll('input, select, textarea').forEach(function(el){
+      if (el.type === 'checkbox'){
+        if (el.name === 'co-finish'){ if (el.checked) finishes.push(el.value); }
+        else data[el.id === 'co-agree' ? 'Agreed to deposit terms' : el.id] = el.checked ? 'Yes' : 'No';
+        return;
+      }
+      var lab = form.querySelector('label[for="' + el.id + '"]');
+      var key = lab ? lab.textContent.replace(/\s*\(optional\)\s*/i, '').trim() : el.id;
+      if (el.value) data[key] = el.value;
+    });
+    if (finishes.length) data['Finishing'] = finishes.join(', ');
+    return data;
+  }
+
   document.addEventListener('submit', function(e){
+    var form = e.target;
+    if (!FORMSPREE[form.id]) return;
     e.preventDefault();
-    if (e.target.id === 'customForm'){
-      var co = document.getElementById('coNote');
-      co.textContent = 'Thanks — your request is in. In your design preview nothing is sent yet; ' +
-                       'once this is live in Shopify it lands in your inbox and you reply with a quote.';
-      e.target.reset();
-    }
-    if (e.target.id === 'contactForm'){
-      var c = document.getElementById('cfNote');
-      c.textContent = 'Thanks — in your design preview this form cannot send yet. ' +
-                      'Email support@lamyaluxxhairco.com and we will reply within three business days.';
-      e.target.reset();
-    }
+    var note = document.getElementById(form.id === 'customForm' ? 'coNote' : 'cfNote');
+    var btn = form.querySelector('button[type="submit"]');
+    var data = formFields(form);
+    var email = form.querySelector('input[type="email"]');
+    if (email) data._replyto = email.value;
+    data._subject = form.id === 'customForm'
+      ? 'New custom order request' + (data['Full name'] ? ' from ' + data['Full name'] : '')
+      : 'New website message' + (data['Name'] ? ' from ' + data['Name'] : '');
+    btn.disabled = true; note.textContent = 'Sending…';
+    fetch(FORMSPREE[form.id], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(data)
+    }).then(function(r){
+      if (!r.ok) throw new Error('send failed');
+      note.textContent = form.id === 'customForm'
+        ? 'Thank you — your custom order request is in. We will email you a quote within three business days.'
+        : 'Thank you — your message is on its way. We reply within three business days.';
+      form.reset();
+    }).catch(function(){
+      note.textContent = 'Sorry, that did not send. Please try again, or email support@lamyaluxxhairco.com.';
+    }).then(function(){ btn.disabled = false; });
   });
 
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && cartOpen) closeCart(); });
